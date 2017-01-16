@@ -7,12 +7,51 @@ import time
 from java.net import SocketException
 from java.lang import NullPointerException
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
+import subprocess
 
-def mConnect(serialName):
-	global device
-	print "connecting %s" % serialName
-	device = MonkeyRunner.waitForConnection(10, serialName)
-	print "device=%s" % device
+if "check_output" not in dir( subprocess ): # duck punch it in!
+    def f(*popenargs, **kwargs):
+        if 'stdout' in kwargs:
+            raise ValueError('stdout argument not allowed, it will be overridden.')
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            error = subprocess.CalledProcessError(retcode, cmd)
+            error.output = output
+            raise error
+        return output
+    subprocess.check_output = f
+
+class IrToolMonkey:
+	def connect(self, serialName):
+		print "connecting %s" % serialName
+		self.device = MonkeyRunner.waitForConnection(10, serialName)
+		print "device=%s" % self.device
+
+	def press(self, keyCode, flags):
+		self.device.press(keyCode, flags)
+
+class IrToolAdb:
+	def connect(self, serialName):
+		cmd="adb connect "+serialName
+		out, ret = self.safeCall(cmd)
+		print out
+
+	def press(self, keyCode, flags):
+		out, ret = self.safeCall("adb shell input keyevent "+keyCode)
+		if out != None:
+			print out
+
+	def safeCall(self, cmd):
+		try:
+			output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+			return (output,0)
+		except subprocess.CalledProcessError, e:
+			return (e.output, e.returncode)
 
 commandDict = {
 'up'	:	'KEYCODE_DPAD_UP',
@@ -86,36 +125,37 @@ def my_raw_input(hint):
     print hint
     return sys.stdin.readline()
 
-def repl():
+def repl(irTool):
 	global commandDict
 	while True:
 		try:
 			cmd = raw_input("ir: ")
 			#print 'cmd=%s' % cmd
 			if cmd in commandDict:
-				device.press(commandDict[cmd], MonkeyDevice.DOWN_AND_UP)
+				irTool.press(commandDict[cmd], MonkeyDevice.DOWN_AND_UP)
 			elif cmd == "quit":
 				break
 			else:
 				splitted = cmd.split(' ', 2)
 				if len(splitted) == 2:
 					if splitted[0] == "connect":
-						mConnect(splitted[1])
+						irTool.connect(splitted[1])
 					elif splitted[0] == 'lp' and splitted[1] in commandDict:
 						for i in range(0, 10):
-							device.press(commandDict[splitted[1]], MonkeyDevice.DOWN_AND_UP)
+							irTool.press(commandDict[splitted[1]], MonkeyDevice.DOWN_AND_UP)
 		except NullPointerException:
 			print 'run command "%s" failed, not connected?' % cmd
 		except EOFError:
 			break
-		except:
-			print 'unknown error'
+		except Exception, e:
+			print 'unknown error: %s' % str(e)
 			break
 
 if __name__ == "__main__":
 	if(len(sys.argv) < 2):
 		print  "ir: a tool to send key strokes to connected android emulator/device\nusage: monkeyrunner.bat /path/to/ir.py DEVICE_SERIAL_NAME\n"
 		sys.exit(0)
-	mConnect(sys.argv[1])
-	repl()
+	irTool = IrToolMonkey()
+	irTool.connect(sys.argv[1])
+	repl(irTool)
 
