@@ -43,7 +43,7 @@ class IrToolAdb:
 
 	def press(self, keyCode, flags):
 		out, ret = self.safeCall("adb shell input keyevent "+keyCode)
-		if out != None:
+		if out != None and out != "":
 			print out
 
 	def safeCall(self, cmd):
@@ -155,7 +155,7 @@ if __name__ == "__main__":
 	if(len(sys.argv) < 2):
 		print  "ir: a tool to send key strokes to connected android emulator/device\nusage: monkeyrunner.bat /path/to/ir.py DEVICE_SERIAL_NAME\n"
 		sys.exit(0)
-	irTool = IrToolMonkey()
+	irTool = IrToolAdb() # IrToolMonkey
 	irTool.connect(sys.argv[1])
 	repl(irTool)
 
